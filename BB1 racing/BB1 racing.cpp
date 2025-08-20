@@ -1,5 +1,16 @@
-// BB1 racing.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
+
+// Hill Climb Racing-style Game with Levels, Fuel, Flipping, and Score (SFML Only)
+// Hill Climb Racing-style Game in SFML with Fuel, Score, Levels, and Flip Detection
+
+// SFML Hill-Style Climber
+// Single-file C++ game inspired by Hill Climb Racing (not a clone).
+// Requirements implemented per user request:
+//  - Start screen: press 1 to play, 0 to exit
+//  - Man on a car; head rotates with car and game over if head hits ground
+//  - Black car, white background; camera follows car
+//  - Hold accelerate/decelerate to induce flips; gravity & terrain following
+//  - 5 levels: lengths 100m,200m,300m,400m,500m (increasing steepness)
+//  - Terrain black; pr
 
 #include <SFML/Graphics.hpp>
 #include <SFML/Window.hpp>
@@ -16,6 +27,7 @@ static const unsigned WINDOW_H = 720;
 static const float   PPM = 8.0f;      // pixels per meter (1 m = 8 px)
 static const float   GRAVITY = 40.0f;     // px/s^2 downward
 static const float   DT_FIXED = 1.0f / 120.f;// fixed-step physics
+
 
 // Level lengths (meters)
 static const int LEVEL_METERS[5] = { 300, 500, 700, 900, 1100 };
@@ -434,7 +446,8 @@ int main() {
     sf::RenderWindow window(sf::VideoMode(WINDOW_W, WINDOW_H), "Hill-Style Climber");
     window.setFramerateLimit(120);
 
-    Game G; G.setupFont();
+    Game G;
+    G.setupFont();
 
     // Initial level
     G.buildLevel(0);
@@ -449,125 +462,133 @@ int main() {
         // ---------------- Events ----------------
         sf::Event ev;
         while (window.pollEvent(ev)) {
-            if (ev.type == sf::Event::Closed) window.close();
+            if (ev.type == sf::Event::Closed)
+                window.close();
+
             if (ev.type == sf::Event::KeyPressed) {
                 if (G.screen == Screen::Menu) {
                     if (ev.key.code == sf::Keyboard::Num1) {
                         G.screen = Screen::Playing;
                         G.buildLevel(0);
-                        G.totalCoins = 0; G.totalDistance_m = 0.0f; G.coinsCollected = 0;
+                        G.totalCoins = 0;
+                        G.totalDistance_m = 0.0f;
+                        G.coinsCollected = 0;
                     }
                     else if (ev.key.code == sf::Keyboard::Num0) {
-                        G.screen = Screen::Exit; window.close();
+                        G.screen = Screen::Exit;
+                        window.close();
                     }
                 }
                 else if (G.screen == Screen::Playing) {
-                    if (ev.key.code == sf::Keyboard::Right || ev.key.code == sf::Keyboard::D) G.car.pressingRight = true;
-                    if (ev.key.code == sf::Keyboard::Left || ev.key.code == sf::Keyboard::A) G.car.pressingLeft = true;
-
-                    else if (G.screen == Screen::GameOver) {
-                        if (ev.key.code == sf::Keyboard::Num1) {
-                            // Restart from Level 1 always
-                            G.totalCoins = 0;
-                            G.totalDistance_m = 0.0f;
-                            G.coinsCollected = 0;
-                            G.unlockedLevels = 1;
-                            G.buildLevel(0);
-                            G.screen = Screen::Playing;
-                        }
-                        else if (ev.key.code == sf::Keyboard::Num0) {
-                            window.close();
-                        }
+                    if (ev.key.code == sf::Keyboard::Right || ev.key.code == sf::Keyboard::D)
+                        G.car.pressingRight = true;
+                    if (ev.key.code == sf::Keyboard::Left || ev.key.code == sf::Keyboard::A)
+                        G.car.pressingLeft = true;
+                }
+                else if (G.screen == Screen::GameOver) {
+                    if (ev.key.code == sf::Keyboard::Num1) {
+                        // Restart from Level 1 always
+                        G.totalCoins = 0;
+                        G.totalDistance_m = 0.0f;
+                        G.coinsCollected = 0;
+                        G.unlockedLevels = 1;
+                        G.buildLevel(0);
+                        G.screen = Screen::Playing;
+                    }
+                    else if (ev.key.code == sf::Keyboard::Num0) {
+                        window.close();
                     }
                 }
-
-                if (ev.type == sf::Event::KeyReleased && G.screen == Screen::Playing) {
-                    if (ev.key.code == sf::Keyboard::Right || ev.key.code == sf::Keyboard::D) G.car.pressingRight = false;
-                    if (ev.key.code == sf::Keyboard::Left || ev.key.code == sf::Keyboard::A) G.car.pressingLeft = false;
-                }
             }
 
-            if (G.screen == Screen::Menu) {
-                drawMenu(window, G);
-                continue;
+            if (ev.type == sf::Event::KeyReleased && G.screen == Screen::Playing) {
+                if (ev.key.code == sf::Keyboard::Right || ev.key.code == sf::Keyboard::D)
+                    G.car.pressingRight = false;
+                if (ev.key.code == sf::Keyboard::Left || ev.key.code == sf::Keyboard::A)
+                    G.car.pressingLeft = false;
             }
-            if (G.screen == Screen::Exit) {
-                break;
-            }
+        } // <-- closes while (pollEvent)
 
-            // ---------------- Fixed-step update ----------------
-            float dt = clock.restart().asSeconds();
-            accumulator += dt;
-            while (accumulator >= DT_FIXED) {
-                stepVehicle(G, DT_FIXED);
-                updateFuelAndPickups(G);
-
-                // Head-ground check
-                if (checkHeadHit(G)) {
-                    G.headHitGround = true;
-                }
-
-                // Finish line
-                if (G.car.x_px >= G.level.finishX_px) {
-                    // Level finished
-                    G.totalDistance_m += G.levelDistance_m;
-                    G.totalCoins += G.coinsCollected;
-
-                    int next = G.currentLevel + 1;
-                    if (next < 5) {
-                        G.unlockedLevels = std::max(G.unlockedLevels, next + 1);
-                        G.buildLevel(next);
-                    }
-                    else {
-                        // All levels complete -> show final score
-                        G.screen = Screen::GameOver;
-                    }
-                }
-
-                // Fuel empty -> game over
-                if (G.fuel_m <= 0.0f || G.headHitGround) {
-                    G.totalDistance_m += G.levelDistance_m;
-                    G.totalCoins += G.coinsCollected;
-                    G.screen = Screen::GameOver;
-                }
-
-                accumulator -= DT_FIXED;
-            }
-
-            if (G.screen == Screen::GameOver) {
-                drawGameOver(window, G);
-                continue;
-            }
-
-            // ---------------- Rendering (Playing) ----------------
-            window.clear(sf::Color::White);
-
-            // Camera follows car (clamped within level bounds + margins)
-            float camX = G.car.x_px;
-            float halfW = WINDOW_W * 0.5f;
-            camX = clampf(camX, halfW, std::max(halfW, G.level.finishX_px - halfW));
-            view.setCenter(camX, WINDOW_H * 0.5f);
-            window.setView(view);
-
-            // Draw terrain in view range
-            float xStart = view.getCenter().x - halfW - 50.0f;
-            float xEnd = view.getCenter().x + halfW + 50.0f;
-            drawTerrain(window, G, std::max(0.0f, xStart), std::min(G.level.finishX_px + 200.0f, xEnd));
-
-            // Draw pickups
-            drawPickups(window, G, xStart, xEnd);
-
-            // Draw car + man
-            drawVehicle(window, G);
-
-            //        // Reset to UI view for HUD
-            window.setView(window.getDefaultView());
-            drawHUD(window, G);
-
-            window.display();
+        // ---------------- Screen-specific logic ----------------
+        if (G.screen == Screen::Menu) {
+            drawMenu(window, G);
+            continue;
+        }
+        if (G.screen == Screen::Exit) {
+            break;
         }
 
+        // ---------------- Fixed-step update ----------------
+        float dt = clock.restart().asSeconds();
+        accumulator += dt;
+        while (accumulator >= DT_FIXED) {
+            stepVehicle(G, DT_FIXED);
+            updateFuelAndPickups(G);
 
-    }
+            // Head-ground check
+            if (checkHeadHit(G)) {
+                G.headHitGround = true;
+            }
+
+            // Finish line
+            if (G.car.x_px >= G.level.finishX_px) {
+                G.totalDistance_m += G.levelDistance_m;
+                G.totalCoins += G.coinsCollected;
+
+                int next = G.currentLevel + 1;
+                if (next < 5) {
+                    G.unlockedLevels = std::max(G.unlockedLevels, next + 1);
+                    G.buildLevel(next);
+                }
+                else {
+                    // All levels complete -> show final score
+                    G.screen = Screen::GameOver;
+                }
+            }
+
+            // Fuel empty or crash -> game over
+            if (G.fuel_m <= 0.0f || G.headHitGround) {
+                G.totalDistance_m += G.levelDistance_m;
+                G.totalCoins += G.coinsCollected;
+                G.screen = Screen::GameOver;
+            }
+
+            accumulator -= DT_FIXED;
+        }
+
+        if (G.screen == Screen::GameOver) {
+            drawGameOver(window, G);
+            continue;
+        }
+
+        // ---------------- Rendering (Playing) ----------------
+        window.clear(sf::Color::White);
+
+        // Camera follows car (clamped within level bounds + margins)
+        float camX = G.car.x_px;
+        float halfW = WINDOW_W * 0.5f;
+        camX = clampf(camX, halfW, std::max(halfW, G.level.finishX_px - halfW));
+        view.setCenter(camX, WINDOW_H * 0.5f);
+        window.setView(view);
+
+        // Draw terrain in view range
+        float xStart = view.getCenter().x - halfW - 50.0f;
+        float xEnd = view.getCenter().x + halfW + 50.0f;
+        drawTerrain(window, G, std::max(0.0f, xStart), std::min(G.level.finishX_px + 200.0f, xEnd));
+
+        // Draw pickups
+        drawPickups(window, G, xStart, xEnd);
+
+        // Draw car + man
+        drawVehicle(window, G);
+
+        // Reset to UI view for HUD
+        window.setView(window.getDefaultView());
+        drawHUD(window, G);
+
+        window.display();
+    } // <-- closes while(window.isOpen())
+
     return 0;
 }
+
