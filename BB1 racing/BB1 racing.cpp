@@ -1,4 +1,3 @@
-
 // Hill Climb Racing-style Game with Levels, Fuel, Flipping, and Score (SFML Only)
 // Hill Climb Racing-style Game in SFML with Fuel, Score, Levels, and Flip Detection
 
@@ -113,7 +112,9 @@ struct Vehicle {
 };
 
 // ---------------------------- Game State ------------------------------
-enum class Screen { Menu, Playing, GameOver, Exit };
+enum class Screen { Menu, Playing, GameOver, LevelComplete, Exit };
+
+struct Button { sf::RectangleShape rect; sf::Text text; bool hovered = false; };
 
 struct Level {
     int index = 0; // 0..4
@@ -148,9 +149,50 @@ struct Game {
 
     bool headHitGround = false;
 
+    // Menu buttons
+    Button playButton;
+    Button exitButton;
+
     void setupFont() {
         if (font.loadFromFile("C:/Windows/Fonts/arial.ttf")) hasFont = true;
         else hasFont = false; // HUD will be minimal but playable
+
+        // Initialize buttons if font is loaded
+        if (hasFont) {
+            // Play button
+            playButton.rect.setSize(sf::Vector2f(200.0f, 50.0f));
+            playButton.rect.setFillColor(sf::Color(0, 120, 255)); // Blue
+            playButton.rect.setOutlineColor(sf::Color::Black);
+            playButton.rect.setOutlineThickness(2.0f);
+            playButton.text.setFont(font);
+            playButton.text.setString("Play");
+            playButton.text.setCharacterSize(24);
+            playButton.text.setFillColor(sf::Color::White);
+            // Center button
+            playButton.rect.setPosition((WINDOW_W - 200.0f) / 2, (WINDOW_H - 50.0f * 2 - 20.0f) / 2);
+            sf::FloatRect textBounds = playButton.text.getLocalBounds();
+            playButton.text.setPosition(
+                playButton.rect.getPosition().x + (200.0f - textBounds.width) / 2,
+                playButton.rect.getPosition().y + (50.0f - textBounds.height) / 2 - textBounds.top
+            );
+
+            // Exit button
+            exitButton.rect.setSize(sf::Vector2f(200.0f, 50.0f));
+            exitButton.rect.setFillColor(sf::Color(0, 120, 255)); // Blue
+            exitButton.rect.setOutlineColor(sf::Color::Black);
+            exitButton.rect.setOutlineThickness(2.0f);
+            exitButton.text.setFont(font);
+            exitButton.text.setString("Exit");
+            exitButton.text.setCharacterSize(24);
+            exitButton.text.setFillColor(sf::Color::White);
+            // Center button below play button
+            exitButton.rect.setPosition((WINDOW_W - 200.0f) / 2, playButton.rect.getPosition().y + 50.0f + 20.0f);
+            textBounds = exitButton.text.getLocalBounds();
+            exitButton.text.setPosition(
+                exitButton.rect.getPosition().x + (200.0f - textBounds.width) / 2,
+                exitButton.rect.getPosition().y + (50.0f - textBounds.height) / 2 - textBounds.top
+            );
+        }
     }
 
     void buildLevel(int idx) {
@@ -186,6 +228,21 @@ struct Game {
         // Place vehicle at start
         auto g0 = sampleGround(0.0f, currentLevel);
         car.reset(10.0f, g0.y);
+    }
+
+    void resetGame() {
+        unlockedLevels = 1;
+        currentLevel = 0;
+        totalDistance_m = 0.0f;
+        totalCoins = 0;
+        coinsCollected = 0;
+        fuel_m = FUEL_TANK_METERS;
+        lastX_forFuel_px = 0.0f;
+        levelDistance_m = 0.0f;
+        headHitGround = false;
+        car.pressingLeft = false;
+        car.pressingRight = false;
+        buildLevel(0);
     }
 };
 
@@ -400,46 +457,200 @@ void drawPickups(sf::RenderWindow& win, const Game& G, float xStart, float xEnd)
 // ---------------------------- Screens ---------------------------------
 void drawMenu(sf::RenderWindow& win, Game& G) {
     win.clear(sf::Color::White);
+
     if (G.hasFont) {
-        sf::Text t1("Hill-Style Climber", G.font, 42);
-        t1.setFillColor(sf::Color::Black);
-        t1.setPosition(60, 80);
-        win.draw(t1);
-        sf::Text t2("Press 1 to Play\nPress 0 to Exit", G.font, 28);
-        t2.setFillColor(sf::Color::Black);
-        t2.setPosition(60, 160);
-        win.draw(t2);
-        sf::Text t3("Controls: D/Right accelerate, A/Left brake\nRefuel cans every 40m; full tank lasts 50m\nFinish the level to unlock the next.", G.font, 20);
-        t3.setFillColor(sf::Color::Black);
-        t3.setPosition(60, 260);
-        win.draw(t3);
+        // Draw title
+        sf::Text title("Hill-Style Climber", G.font, 42);
+        title.setFillColor(sf::Color::Black);
+        title.setPosition((WINDOW_W - title.getLocalBounds().width) / 2, 80);
+        win.draw(title);
+
+        // Update button hover state
+        sf::Vector2i mousePos = sf::Mouse::getPosition(win);
+        G.playButton.hovered = G.playButton.rect.getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y));
+        G.exitButton.hovered = G.exitButton.rect.getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y));
+
+        // Adjust button colors for hover effect
+        G.playButton.rect.setFillColor(G.playButton.hovered ? sf::Color(0, 80, 200) : sf::Color(0, 120, 255));
+        G.exitButton.rect.setFillColor(G.exitButton.hovered ? sf::Color(0, 80, 200) : sf::Color(0, 120, 255));
+
+        // Draw buttons
+        win.draw(G.playButton.rect);
+        win.draw(G.playButton.text);
+        win.draw(G.exitButton.rect);
+        win.draw(G.exitButton.text);
     }
+    else {
+        // Fallback if font fails to load
+        sf::Text fallback("Click top half to Play\nClick bottom half to Exit", G.font, 28);
+        fallback.setFillColor(sf::Color::Black);
+        fallback.setPosition((WINDOW_W - fallback.getLocalBounds().width) / 2, (WINDOW_H - fallback.getLocalBounds().height) / 2);
+        win.draw(fallback);
+    }
+
     win.display();
 }
 
-
-
+// Modified drawGameOver function
 void drawGameOver(sf::RenderWindow& win, Game& G) {
     win.clear(sf::Color::White);
 
     if (G.hasFont) {
         sf::Text t("Game Over", G.font, 48);
         t.setFillColor(sf::Color::Black);
-        t.setPosition(60, 80);
+        t.setPosition((WINDOW_W - t.getLocalBounds().width) / 2, 80);
         win.draw(t);
 
         char buf[256];
         std::snprintf(buf, sizeof(buf),
-            "Distance travelled: %.1fm\nCoins obtained: %d\n\nPress 1 to Restart\nPress 0 to Exit",
+            "Distance travelled: %.1fm\nCoins obtained: %d",
             G.totalDistance_m, G.totalCoins);
         sf::Text s(buf, G.font, 28);
         s.setFillColor(sf::Color::Black);
-        s.setPosition(60, 160);
+        s.setPosition((WINDOW_W - s.getLocalBounds().width) / 2, 160);
         win.draw(s);
+
+        sf::Vector2i mousePos = sf::Mouse::getPosition(win);
+        sf::Color arrowNormal = sf::Color::Black;
+        sf::Color arrowHover = sf::Color::Red;
+        sf::Color buttonNormal = sf::Color(0, 120, 255);
+        sf::Color buttonHover = sf::Color(0, 80, 200);
+        sf::Color buttonTextColor = sf::Color::White;
+
+        // Draw left arrow
+        sf::Text leftArrow(sf::String(static_cast<sf::Uint32>(0x2190)), G.font, 60);
+        leftArrow.setFillColor(leftArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? arrowHover : arrowNormal);
+        leftArrow.setPosition(300, 350);
+        win.draw(leftArrow);
+
+        // Draw right arrow
+        sf::Text rightArrow(sf::String(static_cast<sf::Uint32>(0x2192)), G.font, 60);
+        rightArrow.setFillColor(rightArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? arrowHover : arrowNormal);
+        rightArrow.setPosition(900, 350);
+        win.draw(rightArrow);
+
+        // Draw retry button (middle)
+        sf::RectangleShape retryButton(sf::Vector2f(200.0f, 50.0f));
+        retryButton.setPosition(540.0f, 350.0f);
+        retryButton.setFillColor(retryButton.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? buttonHover : buttonNormal);
+        retryButton.setOutlineColor(sf::Color::Black);
+        retryButton.setOutlineThickness(2.0f);
+        win.draw(retryButton);
+
+        sf::Text retryText("Retry", G.font, 24);
+        retryText.setFillColor(buttonTextColor);
+        sf::FloatRect textBounds = retryText.getLocalBounds();
+        retryText.setPosition(
+            540.0f + (200.0f - textBounds.width) / 2,
+            350.0f + (50.0f - textBounds.height) / 2 - textBounds.top
+        );
+        win.draw(retryText);
+
+        // Draw exit button (lower)
+        sf::RectangleShape exitButton(sf::Vector2f(200.0f, 50.0f));
+        exitButton.setPosition(540.0f, 500.0f);
+        exitButton.setFillColor(exitButton.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? buttonHover : buttonNormal);
+        exitButton.setOutlineColor(sf::Color::Black);
+        exitButton.setOutlineThickness(2.0f);
+        win.draw(exitButton);
+
+        sf::Text exitText("Exit", G.font, 24);
+        exitText.setFillColor(buttonTextColor);
+        textBounds = exitText.getLocalBounds();
+        exitText.setPosition(
+            540.0f + (200.0f - textBounds.width) / 2,
+            500.0f + (50.0f - textBounds.height) / 2 - textBounds.top
+        );
+        win.draw(exitText);
+
+        // Hint (updated to reflect Exit as close, but key remains Backspace for main menu; adjust as needed)
+        sf::Text hint("Left/Right: Change Level   R: Restart   Backspace: Main Menu", G.font, 22);
+        hint.setFillColor(sf::Color::Black);
+        hint.setPosition((WINDOW_W - hint.getLocalBounds().width) / 2, 620);
+        win.draw(hint);
     }
     win.display();
 }
 
+void drawLevelCompleteMenu(sf::RenderWindow& win, Game& G) {
+    win.clear(sf::Color::White);
+
+    if (G.hasFont) {
+        sf::Text t("Level Complete!", G.font, 48);
+        t.setFillColor(sf::Color::Black);
+        t.setPosition((WINDOW_W - t.getLocalBounds().width) / 2, 80);
+        win.draw(t);
+
+        char buf[256];
+        std::snprintf(buf, sizeof(buf),
+            "Level %d\nDistance: %.1fm\nCoins: %d",
+            G.currentLevel + 1, G.levelDistance_m, G.coinsCollected);
+        sf::Text s(buf, G.font, 28);
+        s.setFillColor(sf::Color::Black);
+        s.setPosition((WINDOW_W - s.getLocalBounds().width) / 2, 160);
+        win.draw(s);
+
+        sf::Vector2i mousePos = sf::Mouse::getPosition(win);
+        sf::Color arrowNormal = sf::Color::Black;
+        sf::Color arrowHover = sf::Color::Red;
+        sf::Color buttonNormal = sf::Color(0, 120, 255);
+        sf::Color buttonHover = sf::Color(0, 80, 200);
+        sf::Color buttonTextColor = sf::Color::White;
+
+        // Draw left arrow
+        sf::Text leftArrow(sf::String(static_cast<sf::Uint32>(0x2190)), G.font, 60);
+        leftArrow.setFillColor(leftArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? arrowHover : arrowNormal);
+        leftArrow.setPosition(300, 350);
+        win.draw(leftArrow);
+
+        // Draw right arrow
+        sf::Text rightArrow(sf::String(static_cast<sf::Uint32>(0x2192)), G.font, 60);
+        rightArrow.setFillColor(rightArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? arrowHover : arrowNormal);
+        rightArrow.setPosition(900, 350);
+        win.draw(rightArrow);
+
+        // Draw retry button (middle)
+        sf::RectangleShape retryButton(sf::Vector2f(200.0f, 50.0f));
+        retryButton.setPosition(540.0f, 350.0f);
+        retryButton.setFillColor(retryButton.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? buttonHover : buttonNormal);
+        retryButton.setOutlineColor(sf::Color::Black);
+        retryButton.setOutlineThickness(2.0f);
+        win.draw(retryButton);
+
+        sf::Text retryText("Retry", G.font, 24);
+        retryText.setFillColor(buttonTextColor);
+        sf::FloatRect textBounds = retryText.getLocalBounds();
+        retryText.setPosition(
+            540.0f + (200.0f - textBounds.width) / 2,
+            350.0f + (50.0f - textBounds.height) / 2 - textBounds.top
+        );
+        win.draw(retryText);
+
+        // Draw exit button (lower)
+        sf::RectangleShape exitButton(sf::Vector2f(200.0f, 50.0f));
+        exitButton.setPosition(540.0f, 500.0f);
+        exitButton.setFillColor(exitButton.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? buttonHover : buttonNormal);
+        exitButton.setOutlineColor(sf::Color::Black);
+        exitButton.setOutlineThickness(2.0f);
+        win.draw(exitButton);
+
+        sf::Text exitText("Exit", G.font, 24);
+        exitText.setFillColor(buttonTextColor);
+        textBounds = exitText.getLocalBounds();
+        exitText.setPosition(
+            540.0f + (200.0f - textBounds.width) / 2,
+            500.0f + (50.0f - textBounds.height) / 2 - textBounds.top
+        );
+        win.draw(exitText);
+
+        // Hint
+        sf::Text hint("Left/Right: Change Level   R: Restart   Backspace: Main Menu", G.font, 22);
+        hint.setFillColor(sf::Color::Black);
+        hint.setPosition((WINDOW_W - hint.getLocalBounds().width) / 2, 620);
+        win.draw(hint);
+    }
+    win.display();
+}
 
 // ---------------------------- Main ------------------------------------
 int main() {
@@ -465,14 +676,102 @@ int main() {
             if (ev.type == sf::Event::Closed)
                 window.close();
 
+            if (ev.type == sf::Event::MouseButtonPressed) {
+                if (ev.mouseButton.button == sf::Mouse::Left) {
+                    sf::Vector2f mousePos(ev.mouseButton.x, ev.mouseButton.y);
+                    if (G.screen == Screen::Menu) {
+                        if (G.hasFont) {
+                            if (G.playButton.rect.getGlobalBounds().contains(mousePos)) {
+                                G.screen = Screen::Playing;
+                                G.resetGame();
+                            }
+                            else if (G.exitButton.rect.getGlobalBounds().contains(mousePos)) {
+                                G.screen = Screen::Exit;
+                                window.close();
+                            }
+                        }
+                        else {
+                            // Fallback: click top half for play, bottom half for exit
+                            if (ev.mouseButton.y < WINDOW_H / 2) {
+                                G.screen = Screen::Playing;
+                                G.resetGame();
+                            }
+                            else {
+                                G.screen = Screen::Exit;
+                                window.close();
+                            }
+                        }
+                    }
+                    else if (G.screen == Screen::LevelComplete && G.hasFont) {
+                        sf::Text leftArrow(sf::String(static_cast<sf::Uint32>(0x2190)), G.font, 60); // ←
+                        leftArrow.setPosition(300, 350);
+                        if (leftArrow.getGlobalBounds().contains(mousePos)) {
+                            // Previous level
+                            int prev = std::max(G.currentLevel - 1, 0);
+                            G.buildLevel(prev);
+                            G.screen = Screen::Playing;
+                        }
+                        sf::RectangleShape retryButton(sf::Vector2f(200.0f, 50.0f));
+                        retryButton.setPosition(540, 350);
+                        if (retryButton.getGlobalBounds().contains(mousePos)) {
+                            // Restart current level
+                            G.buildLevel(G.currentLevel);
+                            G.screen = Screen::Playing;
+                        }
+                        sf::Text rightArrow(sf::String(static_cast<sf::Uint32>(0x2192)), G.font, 60); // →
+                        rightArrow.setPosition(900, 350);
+                        if (rightArrow.getGlobalBounds().contains(mousePos)) {
+                            // Next level
+                            int next = std::min(G.currentLevel + 1, 4);
+                            G.buildLevel(next);
+                            G.screen = Screen::Playing;
+                        }
+                        sf::RectangleShape exitButton(sf::Vector2f(200.0f, 50.0f));
+                        exitButton.setPosition(540, 500);
+                        if (exitButton.getGlobalBounds().contains(mousePos)) {
+                            // Return to main menu
+                            G.screen = Screen::Menu;
+                        }
+                    }
+                    else if (G.screen == Screen::GameOver && G.hasFont) {
+                        sf::Text leftArrow(sf::String(static_cast<sf::Uint32>(0x2190)), G.font, 60); // ←
+                        leftArrow.setPosition(300, 350);
+                        if (leftArrow.getGlobalBounds().contains(mousePos)) {
+                            // Previous level
+                            int prev = std::max(G.currentLevel - 1, 0);
+                            G.buildLevel(prev);
+                            G.screen = Screen::Playing;
+                        }
+                        sf::RectangleShape retryButton(sf::Vector2f(200.0f, 50.0f));
+                        retryButton.setPosition(540, 350);
+                        if (retryButton.getGlobalBounds().contains(mousePos)) {
+                            // Restart current level
+                            G.buildLevel(G.currentLevel);
+                            G.screen = Screen::Playing;
+                        }
+                        sf::Text rightArrow(sf::String(static_cast<sf::Uint32>(0x2192)), G.font, 60); // →
+                        rightArrow.setPosition(900, 350);
+                        if (rightArrow.getGlobalBounds().contains(mousePos)) {
+                            // Next level
+                            int next = std::min(G.currentLevel + 1, 4);
+                            G.buildLevel(next);
+                            G.screen = Screen::Playing;
+                        }
+                        sf::RectangleShape exitButton(sf::Vector2f(200.0f, 50.0f));
+                        exitButton.setPosition(540, 500);
+                        if (exitButton.getGlobalBounds().contains(mousePos)) {
+                            // Return to main menu
+                            G.screen = Screen::Menu;
+                        }
+                    }
+                }
+            }
+
             if (ev.type == sf::Event::KeyPressed) {
                 if (G.screen == Screen::Menu) {
                     if (ev.key.code == sf::Keyboard::Num1) {
                         G.screen = Screen::Playing;
-                        G.buildLevel(0);
-                        G.totalCoins = 0;
-                        G.totalDistance_m = 0.0f;
-                        G.coinsCollected = 0;
+                        G.resetGame();
                     }
                     else if (ev.key.code == sf::Keyboard::Num0) {
                         G.screen = Screen::Exit;
@@ -487,16 +786,34 @@ int main() {
                 }
                 else if (G.screen == Screen::GameOver) {
                     if (ev.key.code == sf::Keyboard::Num1) {
-                        // Restart from Level 1 always
-                        G.totalCoins = 0;
-                        G.totalDistance_m = 0.0f;
-                        G.coinsCollected = 0;
-                        G.unlockedLevels = 1;
-                        G.buildLevel(0);
+                        G.resetGame();
                         G.screen = Screen::Playing;
                     }
                     else if (ev.key.code == sf::Keyboard::Num0) {
                         window.close();
+                    }
+                }
+                else if (G.screen == Screen::LevelComplete) {
+                    if (ev.key.code == sf::Keyboard::Right) {
+                        // Next level
+                        int next = std::min(G.currentLevel + 1, 4);
+                        G.buildLevel(next);
+                        G.screen = Screen::Playing;
+                    }
+                    else if (ev.key.code == sf::Keyboard::Left) {
+                        // Previous level
+                        int prev = std::max(G.currentLevel - 1, 0);
+                        G.buildLevel(prev);
+                        G.screen = Screen::Playing;
+                    }
+                    else if (ev.key.code == sf::Keyboard::R) {
+                        // Restart current level
+                        G.buildLevel(G.currentLevel);
+                        G.screen = Screen::Playing;
+                    }
+                    else if (ev.key.code == sf::Keyboard::BackSpace) {
+                        // Return to main menu
+                        G.screen = Screen::Menu;
                     }
                 }
             }
@@ -522,6 +839,9 @@ int main() {
         float dt = clock.restart().asSeconds();
         accumulator += dt;
         while (accumulator >= DT_FIXED) {
+            if (G.screen != Screen::Playing)
+                break; // Stop updating if not playing
+
             stepVehicle(G, DT_FIXED);
             updateFuelAndPickups(G);
 
@@ -538,7 +858,8 @@ int main() {
                 int next = G.currentLevel + 1;
                 if (next < 5) {
                     G.unlockedLevels = std::max(G.unlockedLevels, next + 1);
-                    G.buildLevel(next);
+                    // Instead of immediately starting next level, show level complete menu
+                    G.screen = Screen::LevelComplete;
                 }
                 else {
                     // All levels complete -> show final score
@@ -558,6 +879,10 @@ int main() {
 
         if (G.screen == Screen::GameOver) {
             drawGameOver(window, G);
+            continue;
+        }
+        if (G.screen == Screen::LevelComplete) {
+            drawLevelCompleteMenu(window, G);
             continue;
         }
 
@@ -591,4 +916,3 @@ int main() {
 
     return 0;
 }
-
