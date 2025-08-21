@@ -223,11 +223,18 @@ struct Game {
         fuel_m = FUEL_TANK_METERS;
         lastX_forFuel_px = 0.0f;
         levelDistance_m = 0.0f;
+        coinsCollected = 0;
         headHitGround = false;
 
         // Place vehicle at start
         auto g0 = sampleGround(0.0f, currentLevel);
         car.reset(10.0f, g0.y);
+
+        // Explicitly reset vehicle speed and other relevant variables
+        car.vx = 0.0f;
+        car.vy = 0.0f;
+        car.pressingLeft = false;
+        car.pressingRight = false;
     }
 
     void resetGame() {
@@ -438,7 +445,7 @@ void drawPickups(sf::RenderWindow& win, const Game& G, float xStart, float xEnd)
         sf::RectangleShape can(sf::Vector2f(18.0f, 22.0f));
         can.setOrigin(9.0f, 11.0f);
         can.setPosition(c.x_px, gs.y - 18.0f);
-        can.setFillColor(sf::Color::Black);
+        can.setFillColor(sf::Color::Red);
         win.draw(can);
     }
 
@@ -449,7 +456,7 @@ void drawPickups(sf::RenderWindow& win, const Game& G, float xStart, float xEnd)
         sf::CircleShape c(8.0f, 12);
         c.setOrigin(8.0f, 8.0f);
         c.setPosition(coin.x_px, coin.y_px);
-        c.setFillColor(sf::Color(0, 0, 0));
+        c.setFillColor(sf::Color::Green);
         win.draw(c);
     }
 }
@@ -460,7 +467,7 @@ void drawMenu(sf::RenderWindow& win, Game& G) {
 
     if (G.hasFont) {
         // Draw title
-        sf::Text title("Hill-Style Climber", G.font, 42);
+        sf::Text title("Black And White Racing", G.font, 42);
         title.setFillColor(sf::Color::Black);
         title.setPosition((WINDOW_W - title.getLocalBounds().width) / 2, 80);
         win.draw(title);
@@ -654,7 +661,7 @@ void drawLevelCompleteMenu(sf::RenderWindow& win, Game& G) {
 
 // ---------------------------- Main ------------------------------------
 int main() {
-    sf::RenderWindow window(sf::VideoMode(WINDOW_W, WINDOW_H), "Hill-Style Climber");
+    sf::RenderWindow window(sf::VideoMode(WINDOW_W, WINDOW_H), "Black And White Racing");
     window.setFramerateLimit(120);
 
     Game G;
@@ -723,8 +730,10 @@ int main() {
                         if (rightArrow.getGlobalBounds().contains(mousePos)) {
                             // Next level
                             int next = std::min(G.currentLevel + 1, 4);
-                            G.buildLevel(next);
-                            G.screen = Screen::Playing;
+                            if (next < G.unlockedLevels) {
+                                G.buildLevel(next);
+                                G.screen = Screen::Playing;
+                            }
                         }
                         sf::RectangleShape exitButton(sf::Vector2f(200.0f, 50.0f));
                         exitButton.setPosition(540, 500);
@@ -754,8 +763,10 @@ int main() {
                         if (rightArrow.getGlobalBounds().contains(mousePos)) {
                             // Next level
                             int next = std::min(G.currentLevel + 1, 4);
-                            G.buildLevel(next);
-                            G.screen = Screen::Playing;
+                            if (next < G.unlockedLevels) {
+                                G.buildLevel(next);
+                                G.screen = Screen::Playing;
+                            }
                         }
                         sf::RectangleShape exitButton(sf::Vector2f(200.0f, 50.0f));
                         exitButton.setPosition(540, 500);
@@ -766,12 +777,12 @@ int main() {
                     }
                 }
             }
-
             if (ev.type == sf::Event::KeyPressed) {
                 if (G.screen == Screen::Menu) {
                     if (ev.key.code == sf::Keyboard::Num1) {
-                        G.screen = Screen::Playing;
+                        G.currentLevel = 0; // Start from level 0
                         G.resetGame();
+                        G.screen = Screen::Playing;
                     }
                     else if (ev.key.code == sf::Keyboard::Num0) {
                         G.screen = Screen::Exit;
@@ -784,39 +795,32 @@ int main() {
                     if (ev.key.code == sf::Keyboard::Left || ev.key.code == sf::Keyboard::A)
                         G.car.pressingLeft = true;
                 }
-                else if (G.screen == Screen::GameOver) {
-                    if (ev.key.code == sf::Keyboard::Num1) {
-                        G.resetGame();
-                        G.screen = Screen::Playing;
-                    }
-                    else if (ev.key.code == sf::Keyboard::Num0) {
-                        window.close();
-                    }
+
+                // Global key actions (valid in multiple screens)
+                if (ev.key.code == sf::Keyboard::Left) {
+                    int prev = std::max(G.currentLevel - 1, 0);
+                    G.currentLevel = prev;
+                    G.buildLevel(prev);
+                    G.screen = Screen::Playing;
                 }
-                else if (G.screen == Screen::LevelComplete) {
-                    if (ev.key.code == sf::Keyboard::Right) {
-                        // Next level
-                        int next = std::min(G.currentLevel + 1, 4);
+                else if (ev.key.code == sf::Keyboard::Right) {
+                    int next = std::min(G.currentLevel + 1, 4);
+                    if (next < G.unlockedLevels) {
+                        G.currentLevel = next;
                         G.buildLevel(next);
                         G.screen = Screen::Playing;
                     }
-                    else if (ev.key.code == sf::Keyboard::Left) {
-                        // Previous level
-                        int prev = std::max(G.currentLevel - 1, 0);
-                        G.buildLevel(prev);
-                        G.screen = Screen::Playing;
-                    }
-                    else if (ev.key.code == sf::Keyboard::R) {
-                        // Restart current level
-                        G.buildLevel(G.currentLevel);
-                        G.screen = Screen::Playing;
-                    }
-                    else if (ev.key.code == sf::Keyboard::BackSpace) {
-                        // Return to main menu
-                        G.screen = Screen::Menu;
-                    }
+                }
+                else if (ev.key.code == sf::Keyboard::R) {
+                    // Restart current level — ensure currentLevel is preserved
+                    G.buildLevel(G.currentLevel);
+                    G.screen = Screen::Playing;
+                }
+                else if (ev.key.code == sf::Keyboard::BackSpace) {
+                    G.screen = Screen::Menu;
                 }
             }
+
 
             if (ev.type == sf::Event::KeyReleased && G.screen == Screen::Playing) {
                 if (ev.key.code == sf::Keyboard::Right || ev.key.code == sf::Keyboard::D)
@@ -867,6 +871,8 @@ int main() {
                 }
             }
 
+
+
             // Fuel empty or crash -> game over
             if (G.fuel_m <= 0.0f || G.headHitGround) {
                 G.totalDistance_m += G.levelDistance_m;
@@ -913,6 +919,7 @@ int main() {
 
         window.display();
     } // <-- closes while(window.isOpen())
+
 
     return 0;
 }
