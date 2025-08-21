@@ -491,8 +491,7 @@ void drawMenu(sf::RenderWindow& win, Game& G) {
     win.display();
 }
 
-// ... (previous code remains unchanged until drawGameOver) ...
-
+// Modified drawGameOver function
 void drawGameOver(sf::RenderWindow& win, Game& G) {
     win.clear(sf::Color::White);
 
@@ -512,81 +511,59 @@ void drawGameOver(sf::RenderWindow& win, Game& G) {
         win.draw(s);
 
         sf::Vector2i mousePos = sf::Mouse::getPosition(win);
-        sf::Color normalColor = sf::Color::Black;
-        sf::Color hoverColor = sf::Color::Red;
+        sf::Color arrowNormal = sf::Color::Black;
+        sf::Color arrowHover = sf::Color::Red;
+        sf::Color buttonNormal = sf::Color(0, 120, 255);
+        sf::Color buttonHover = sf::Color(0, 80, 200);
+        sf::Color buttonTextColor = sf::Color::White;
 
-        // Draw arrows and symbols with hover effect
-        sf::Text leftArrow(sf::String(static_cast<sf::Uint32>(0x2190)), G.font, 60); // ←
-        leftArrow.setFillColor(leftArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? hoverColor : normalColor);
+        // Draw left arrow
+        sf::Text leftArrow(sf::String(static_cast<sf::Uint32>(0x2190)), G.font, 60);
+        leftArrow.setFillColor(leftArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? arrowHover : arrowNormal);
         leftArrow.setPosition(300, 350);
         win.draw(leftArrow);
 
-        sf::Text restartArrow(sf::String(static_cast<sf::Uint32>(0x27F3)), G.font, 60); // ⟳
-        restartArrow.setFillColor(restartArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? hoverColor : normalColor);
-        restartArrow.setPosition(600, 350);
-        win.draw(restartArrow);
-
-        sf::Text rightArrow(sf::String(static_cast<sf::Uint32>(0x2192)), G.font, 60); // →
-        rightArrow.setFillColor(rightArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? hoverColor : normalColor);
+        // Draw right arrow
+        sf::Text rightArrow(sf::String(static_cast<sf::Uint32>(0x2192)), G.font, 60);
+        rightArrow.setFillColor(rightArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? arrowHover : arrowNormal);
         rightArrow.setPosition(900, 350);
         win.draw(rightArrow);
 
-        sf::Text backspaceSymbol(sf::String(static_cast<sf::Uint32>(0x232B)), G.font, 60); // ⌫
-        backspaceSymbol.setFillColor(backspaceSymbol.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? hoverColor : normalColor);
-        backspaceSymbol.setPosition(600, 500);
-        win.draw(backspaceSymbol);
+        // Draw retry button (middle)
+        sf::RectangleShape retryButton(sf::Vector2f(200.0f, 50.0f));
+        retryButton.setPosition(540.0f, 350.0f);
+        retryButton.setFillColor(retryButton.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? buttonHover : buttonNormal);
+        retryButton.setOutlineColor(sf::Color::Black);
+        retryButton.setOutlineThickness(2.0f);
+        win.draw(retryButton);
 
-        sf::Text hint("Left/Right: Change Level   R: Restart   Backspace: Main Menu", G.font, 22);
-        hint.setFillColor(sf::Color::Black);
-        hint.setPosition((WINDOW_W - hint.getLocalBounds().width) / 2, 620);
-        win.draw(hint);
-    }
-    win.display();
-}
+        sf::Text retryText("Retry", G.font, 24);
+        retryText.setFillColor(buttonTextColor);
+        sf::FloatRect textBounds = retryText.getLocalBounds();
+        retryText.setPosition(
+            540.0f + (200.0f - textBounds.width) / 2,
+            350.0f + (50.0f - textBounds.height) / 2 - textBounds.top
+        );
+        win.draw(retryText);
 
-void drawLevelComplete(sf::RenderWindow& win, Game& G) {
-    win.clear(sf::Color::White);
+        // Draw exit button (lower)
+        sf::RectangleShape exitButton(sf::Vector2f(200.0f, 50.0f));
+        exitButton.setPosition(540.0f, 500.0f);
+        exitButton.setFillColor(exitButton.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? buttonHover : buttonNormal);
+        exitButton.setOutlineColor(sf::Color::Black);
+        exitButton.setOutlineThickness(2.0f);
+        win.draw(exitButton);
 
-    if (G.hasFont) {
-        sf::Text t("Level Complete!", G.font, 48);
-        t.setFillColor(sf::Color::Black);
-        t.setPosition((WINDOW_W - t.getLocalBounds().width) / 2, 80);
-        win.draw(t);
+        sf::Text exitText("Exit", G.font, 24);
+        exitText.setFillColor(buttonTextColor);
+        textBounds = exitText.getLocalBounds();
+        exitText.setPosition(
+            540.0f + (200.0f - textBounds.width) / 2,
+            500.0f + (50.0f - textBounds.height) / 2 - textBounds.top
+        );
+        win.draw(exitText);
 
-        char buf[256];
-        std::snprintf(buf, sizeof(buf),
-            "Distance travelled: %.1fm\nCoins obtained: %d",
-            G.levelDistance_m, G.coinsCollected);
-        sf::Text s(buf, G.font, 28);
-        s.setFillColor(sf::Color::Black);
-        s.setPosition((WINDOW_W - s.getLocalBounds().width) / 2, 160);
-        win.draw(s);
-
-        sf::Vector2i mousePos = sf::Mouse::getPosition(win);
-        sf::Color normalColor = sf::Color::Black;
-        sf::Color hoverColor = sf::Color::Red;
-
-        // Draw arrows and symbols with hover effect
-        sf::Text leftArrow(sf::String(static_cast<sf::Uint32>(0x2190)), G.font, 60); // ←
-        leftArrow.setFillColor(leftArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? hoverColor : normalColor);
-        leftArrow.setPosition(300, 350);
-        win.draw(leftArrow);
-
-        sf::Text restartArrow(sf::String(static_cast<sf::Uint32>(0x27F3)), G.font, 60); // ⟳
-        restartArrow.setFillColor(restartArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? hoverColor : normalColor);
-        restartArrow.setPosition(600, 350);
-        win.draw(restartArrow);
-
-        sf::Text rightArrow(sf::String(static_cast<sf::Uint32>(0x2192)), G.font, 60); // →
-        rightArrow.setFillColor(rightArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? hoverColor : normalColor);
-        rightArrow.setPosition(900, 350);
-        win.draw(rightArrow);
-
-        sf::Text backspaceSymbol(sf::String(static_cast<sf::Uint32>(0x232B)), G.font, 60); // ⌫
-        backspaceSymbol.setFillColor(backspaceSymbol.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? hoverColor : normalColor);
-        backspaceSymbol.setPosition(600, 500);
-        win.draw(backspaceSymbol);
-
+        // Hint (updated to reflect Exit as close, but key remains Backspace for main menu; adjust as needed)
         sf::Text hint("Left/Right: Change Level   R: Restart   Backspace: Main Menu", G.font, 22);
         hint.setFillColor(sf::Color::Black);
         hint.setPosition((WINDOW_W - hint.getLocalBounds().width) / 2, 620);
@@ -597,44 +574,76 @@ void drawLevelComplete(sf::RenderWindow& win, Game& G) {
 
 void drawLevelCompleteMenu(sf::RenderWindow& win, Game& G) {
     win.clear(sf::Color::White);
+
     if (G.hasFont) {
         sf::Text t("Level Complete!", G.font, 48);
         t.setFillColor(sf::Color::Black);
         t.setPosition((WINDOW_W - t.getLocalBounds().width) / 2, 80);
         win.draw(t);
 
-        char buf[128];
-        std::snprintf(buf, sizeof(buf), "Level %d\nDistance: %.1fm\nCoins: %d", G.currentLevel + 1, G.levelDistance_m, G.coinsCollected);
-        sf::Text stats(buf, G.font, 28);
-        stats.setFillColor(sf::Color::Black);
-        stats.setPosition((WINDOW_W - stats.getLocalBounds().width) / 2, 160);
-        win.draw(stats);
+        char buf[256];
+        std::snprintf(buf, sizeof(buf),
+            "Level %d\nDistance: %.1fm\nCoins: %d",
+            G.currentLevel + 1, G.levelDistance_m, G.coinsCollected);
+        sf::Text s(buf, G.font, 28);
+        s.setFillColor(sf::Color::Black);
+        s.setPosition((WINDOW_W - s.getLocalBounds().width) / 2, 160);
+        win.draw(s);
 
         sf::Vector2i mousePos = sf::Mouse::getPosition(win);
-        sf::Color normalColor = sf::Color::Black;
-        sf::Color hoverColor = sf::Color::Red;
+        sf::Color arrowNormal = sf::Color::Black;
+        sf::Color arrowHover = sf::Color::Red;
+        sf::Color buttonNormal = sf::Color(0, 120, 255);
+        sf::Color buttonHover = sf::Color(0, 80, 200);
+        sf::Color buttonTextColor = sf::Color::White;
 
-        // Draw arrows and symbols with hover effect
-        sf::Text leftArrow(sf::String(static_cast<sf::Uint32>(0x2190)), G.font, 60); // ←
-        leftArrow.setFillColor(leftArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? hoverColor : normalColor);
+        // Draw left arrow
+        sf::Text leftArrow(sf::String(static_cast<sf::Uint32>(0x2190)), G.font, 60);
+        leftArrow.setFillColor(leftArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? arrowHover : arrowNormal);
         leftArrow.setPosition(300, 350);
         win.draw(leftArrow);
 
-        sf::Text restartArrow(sf::String(static_cast<sf::Uint32>(0x27F3)), G.font, 60); // ⟳
-        restartArrow.setFillColor(restartArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? hoverColor : normalColor);
-        restartArrow.setPosition(600, 350);
-        win.draw(restartArrow);
-
-        sf::Text rightArrow(sf::String(static_cast<sf::Uint32>(0x2192)), G.font, 60); // →
-        rightArrow.setFillColor(rightArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? hoverColor : normalColor);
+        // Draw right arrow
+        sf::Text rightArrow(sf::String(static_cast<sf::Uint32>(0x2192)), G.font, 60);
+        rightArrow.setFillColor(rightArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? arrowHover : arrowNormal);
         rightArrow.setPosition(900, 350);
         win.draw(rightArrow);
 
-        sf::Text backspaceSymbol(sf::String(static_cast<sf::Uint32>(0x232B)), G.font, 60); // ⌫
-        backspaceSymbol.setFillColor(backspaceSymbol.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? hoverColor : normalColor);
-        backspaceSymbol.setPosition(600, 500);
-        win.draw(backspaceSymbol);
+        // Draw retry button (middle)
+        sf::RectangleShape retryButton(sf::Vector2f(200.0f, 50.0f));
+        retryButton.setPosition(540.0f, 350.0f);
+        retryButton.setFillColor(retryButton.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? buttonHover : buttonNormal);
+        retryButton.setOutlineColor(sf::Color::Black);
+        retryButton.setOutlineThickness(2.0f);
+        win.draw(retryButton);
 
+        sf::Text retryText("Retry", G.font, 24);
+        retryText.setFillColor(buttonTextColor);
+        sf::FloatRect textBounds = retryText.getLocalBounds();
+        retryText.setPosition(
+            540.0f + (200.0f - textBounds.width) / 2,
+            350.0f + (50.0f - textBounds.height) / 2 - textBounds.top
+        );
+        win.draw(retryText);
+
+        // Draw exit button (lower)
+        sf::RectangleShape exitButton(sf::Vector2f(200.0f, 50.0f));
+        exitButton.setPosition(540.0f, 500.0f);
+        exitButton.setFillColor(exitButton.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? buttonHover : buttonNormal);
+        exitButton.setOutlineColor(sf::Color::Black);
+        exitButton.setOutlineThickness(2.0f);
+        win.draw(exitButton);
+
+        sf::Text exitText("Exit", G.font, 24);
+        exitText.setFillColor(buttonTextColor);
+        textBounds = exitText.getLocalBounds();
+        exitText.setPosition(
+            540.0f + (200.0f - textBounds.width) / 2,
+            500.0f + (50.0f - textBounds.height) / 2 - textBounds.top
+        );
+        win.draw(exitText);
+
+        // Hint
         sf::Text hint("Left/Right: Change Level   R: Restart   Backspace: Main Menu", G.font, 22);
         hint.setFillColor(sf::Color::Black);
         hint.setPosition((WINDOW_W - hint.getLocalBounds().width) / 2, 620);
@@ -642,8 +651,6 @@ void drawLevelCompleteMenu(sf::RenderWindow& win, Game& G) {
     }
     win.display();
 }
-
-// ... (rest of the code remains unchanged) ...
 
 // ---------------------------- Main ------------------------------------
 int main() {
@@ -704,9 +711,9 @@ int main() {
                             G.buildLevel(prev);
                             G.screen = Screen::Playing;
                         }
-                        sf::Text restartArrow(sf::String(static_cast<sf::Uint32>(0x27F3)), G.font, 60); // ⟳
-                        restartArrow.setPosition(600, 350);
-                        if (restartArrow.getGlobalBounds().contains(mousePos)) {
+                        sf::RectangleShape retryButton(sf::Vector2f(200.0f, 50.0f));
+                        retryButton.setPosition(540, 350);
+                        if (retryButton.getGlobalBounds().contains(mousePos)) {
                             // Restart current level
                             G.buildLevel(G.currentLevel);
                             G.screen = Screen::Playing;
@@ -719,9 +726,9 @@ int main() {
                             G.buildLevel(next);
                             G.screen = Screen::Playing;
                         }
-                        sf::Text backspaceSymbol(sf::String(static_cast<sf::Uint32>(0x232B)), G.font, 60); // ⌫
-                        backspaceSymbol.setPosition(600, 500);
-                        if (backspaceSymbol.getGlobalBounds().contains(mousePos)) {
+                        sf::RectangleShape exitButton(sf::Vector2f(200.0f, 50.0f));
+                        exitButton.setPosition(540, 500);
+                        if (exitButton.getGlobalBounds().contains(mousePos)) {
                             // Return to main menu
                             G.screen = Screen::Menu;
                         }
@@ -735,9 +742,9 @@ int main() {
                             G.buildLevel(prev);
                             G.screen = Screen::Playing;
                         }
-                        sf::Text restartArrow(sf::String(static_cast<sf::Uint32>(0x27F3)), G.font, 60); // ⟳
-                        restartArrow.setPosition(600, 350);
-                        if (restartArrow.getGlobalBounds().contains(mousePos)) {
+                        sf::RectangleShape retryButton(sf::Vector2f(200.0f, 50.0f));
+                        retryButton.setPosition(540, 350);
+                        if (retryButton.getGlobalBounds().contains(mousePos)) {
                             // Restart current level
                             G.buildLevel(G.currentLevel);
                             G.screen = Screen::Playing;
@@ -750,9 +757,9 @@ int main() {
                             G.buildLevel(next);
                             G.screen = Screen::Playing;
                         }
-                        sf::Text backspaceSymbol(sf::String(static_cast<sf::Uint32>(0x232B)), G.font, 60); // ⌫
-                        backspaceSymbol.setPosition(600, 500);
-                        if (backspaceSymbol.getGlobalBounds().contains(mousePos)) {
+                        sf::RectangleShape exitButton(sf::Vector2f(200.0f, 50.0f));
+                        exitButton.setPosition(540, 500);
+                        if (exitButton.getGlobalBounds().contains(mousePos)) {
                             // Return to main menu
                             G.screen = Screen::Menu;
                         }
