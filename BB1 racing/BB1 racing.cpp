@@ -19,6 +19,7 @@
 #include <string>
 #include <iostream>
 #include <iomanip>
+#include <algorithm>
 
 // ---------------------------- Config ---------------------------------
 static const unsigned WINDOW_W = 1280;
@@ -109,10 +110,15 @@ struct Vehicle {
     sf::Vector2f frontWheelPos() const { return localToWorld(+wheelBase * 0.5f, bodyH * 0.5f); }
     sf::Vector2f rearWheelPos()  const { return localToWorld(-wheelBase * 0.5f, bodyH * 0.5f); }
     sf::Vector2f headPos()       const { return localToWorld(0.0f, -bodyH * 0.9f); }
+
+    sf::Vector2f localToWorldTemp(float tempX, float tempY, float tempAngle, float lx, float ly) const {
+        float c = std::cos(tempAngle), s = std::sin(tempAngle);
+        return sf::Vector2f(tempX + c * lx - s * ly, tempY + s * lx + c * ly);
+    }
 };
 
 // ---------------------------- Game State ------------------------------
-enum class Screen { Menu, Playing, GameOver, LevelComplete, Exit };
+enum class Screen { Menu, Playing, GameOver, LevelComplete, Exit, GameCompleted };
 
 struct Button { sf::RectangleShape rect; sf::Text text; bool hovered = false; };
 
@@ -148,6 +154,7 @@ struct Game {
     int   totalCoins = 0;
 
     bool headHitGround = false;
+    float fuel_out_timer = -1.0f;
 
     // Menu buttons
     Button playButton;
@@ -225,6 +232,7 @@ struct Game {
         levelDistance_m = 0.0f;
         coinsCollected = 0;
         headHitGround = false;
+        fuel_out_timer = -1.0f;
 
         // Place vehicle at start
         auto g0 = sampleGround(0.0f, currentLevel);
@@ -247,6 +255,7 @@ struct Game {
         lastX_forFuel_px = 0.0f;
         levelDistance_m = 0.0f;
         headHitGround = false;
+        fuel_out_timer = -1.0f;
         car.pressingLeft = false;
         car.pressingRight = false;
         buildLevel(0);
@@ -260,54 +269,91 @@ void stepVehicle(Game& G, float dt) {
     // Simple gravity
     V.vy += GRAVITY * dt;
 
-    // Input forces
-    const float accel = 120.0f;      // px/s^2 along facing direction (flat)
-    const float maxVx = 260.0f;      // px/s
-    const float torque = 1.8f;       // rad/s^2 (air)
+    // Tentative position without input acceleration
+    float tempX = V.x_px + V.vx * dt;
+    float tempY = V.y_px + V.vy * dt;
+    float tempAngle = V.angle + V.angV * dt;
 
-    if (V.pressingRight) {
-        V.vx += accel * dt;
-        V.angV -= torque * dt; // tendency to front flip
-    }
-    if (V.pressingLeft) {
-        V.vx -= accel * dt;
-        V.angV += torque * dt; // tendency to back flip
-    }
-    V.vx = clampf(V.vx, -maxVx, maxVx);
+    // Tentative wheel positions
+    sf::Vector2f tempFront = V.localToWorldTemp(tempX, tempY, tempAngle, +V.wheelBase * 0.5f, V.bodyH * 0.5f);
+    sf::Vector2f tempRear = V.localToWorldTemp(tempX, tempY, tempAngle, -V.wheelBase * 0.5f, V.bodyH * 0.5f);
 
-    // Integrate tentative position
+    // Check if would be on ground
+    bool onGroundTentative = false;
+    auto checkContact = [&](sf::Vector2f wp) {
+        auto gs = sampleGround(wp.x, G.currentLevel);
+        float groundY = gs.y - V.wheelR;
+        float dy = wp.y - groundY;
+        if (dy > 0.0f) {
+            onGroundTentative = true;
+        }
+        };
+    checkContact(tempFront);
+    checkContact(tempRear);
+
+    // Input forces only if fuel > 0
+    if (G.fuel_m > 0.0f) {
+        const float accel = 300.0f;      // px/s^2 along car direction (increased for faster speed)
+        const float torque = 1.8f;       // rad/s^2 (air)
+
+        if (V.pressingRight) {
+            if (onGroundTentative) {
+                float dirX = std::cos(tempAngle);
+                float dirY = std::sin(tempAngle);
+                V.vx += accel * dt * dirX;
+                V.vy += accel * dt * dirY;
+            }
+            V.angV -= torque * dt; // clockwise (front flip)
+        }
+        if (V.pressingLeft) {
+            if (onGroundTentative) {
+                float dirX = std::cos(tempAngle);
+                float dirY = std::sin(tempAngle);
+                V.vx -= accel * dt * dirX;
+                V.vy -= accel * dt * dirY;
+            }
+            V.angV += torque * dt; // anti-clockwise (back flip)
+        }
+    }
+
+    // Integrate position with updated velocities
     V.x_px += V.vx * dt;
     V.y_px += V.vy * dt;
     V.angle += V.angV * dt;
 
     // Wheel-ground collision & alignment
+    int wheelsOnGround = 0;
     auto fixWheel = [&](sf::Vector2f wp) {
         auto gs = sampleGround(wp.x, G.currentLevel);
         float groundY = gs.y - V.wheelR;
         float dy = wp.y - groundY;
         if (dy > 0.0f) { // wheel penetrates ground -> push car up
+            wheelsOnGround++;
             // Move chassis up by dy projected along body-down direction (approx)
             V.y_px -= dy;
             V.vy = std::min(0.0f, V.vy);
             // Dampen angular velocity and align angle slightly with slope
-            float targetAngle = std::atan2(gs.slope, 1.0f);
+            float targetAngle = std::atan(gs.slope);
             float alignRate = 4.5f * dt;
             // wrap to nearest
             float da = targetAngle - V.angle;
             while (da > 3.14159f) da -= 6.28318f;
             while (da < -3.14159f) da += 6.28318f;
             V.angle += clampf(da, -alignRate, alignRate);
-            V.angV *= 0.85f;
-            // Ground friction affecting vx
-            V.vx *= 0.99f;
         }
         };
 
     fixWheel(V.frontWheelPos());
     fixWheel(V.rearWheelPos());
 
+    if (wheelsOnGround > 0) {
+        float groundFriction = (G.fuel_m > 0.0f ? 0.999f : 0.99f);
+        V.vx *= groundFriction;
+        V.angV *= 0.92f;
+    }
+
     // Air drag & angular damping
-    V.vx *= 0.999f;
+    V.vx *= 0.9998f;
     V.angV *= 0.999f;
 }
 
@@ -321,20 +367,45 @@ void updateFuelAndPickups(Game& G) {
         G.lastX_forFuel_px = G.car.x_px;
     }
 
+    sf::Vector2f fw = G.car.frontWheelPos();
+    sf::Vector2f rw = G.car.rearWheelPos();
+
     // Fuel cans
     for (auto& c : G.level.cans) {
-        if (!c.taken && std::fabs(c.x_px - G.car.x_px) < 20.0f) {
-            c.taken = true;
-            G.fuel_m = FUEL_TANK_METERS; // refill to full
+        if (!c.taken) {
+            auto gs = sampleGround(c.x_px, G.currentLevel);
+            float canY = gs.y - 18.0f;
+            float dx_c = c.x_px - G.car.x_px;
+            float dy_c = canY - G.car.y_px;
+            float dist_c = std::sqrt(dx_c * dx_c + dy_c * dy_c);
+            float dx_f = c.x_px - fw.x;
+            float dy_f = canY - fw.y;
+            float dist_f = std::sqrt(dx_f * dx_f + dy_f * dy_f);
+            float dx_r = c.x_px - rw.x;
+            float dy_r = canY - rw.y;
+            float dist_r = std::sqrt(dx_r * dx_r + dy_r * dy_r);
+            float min_dist = std::min({ dist_c, dist_f, dist_r });
+            if (min_dist < 30.0f) {
+                c.taken = true;
+                G.fuel_m = FUEL_TANK_METERS; // refill to full
+            }
         }
     }
 
     // Coins
     for (auto& coin : G.level.coins) {
         if (!coin.taken) {
-            float dx = coin.x_px - G.car.x_px;
-            float dy = coin.y_px - G.car.y_px;
-            if (std::sqrt(dx * dx + dy * dy) < 28.0f) {
+            float dx_c = coin.x_px - G.car.x_px;
+            float dy_c = coin.y_px - G.car.y_px;
+            float dist_c = std::sqrt(dx_c * dx_c + dy_c * dy_c);
+            float dx_f = coin.x_px - fw.x;
+            float dy_f = coin.y_px - fw.y;
+            float dist_f = std::sqrt(dx_f * dx_f + dy_f * dy_f);
+            float dx_r = coin.x_px - rw.x;
+            float dy_r = coin.y_px - rw.y;
+            float dist_r = std::sqrt(dx_r * dx_r + dy_r * dy_r);
+            float min_dist = std::min({ dist_c, dist_f, dist_r });
+            if (min_dist < 28.0f) {
                 coin.taken = true;
                 G.coinsCollected++;
             }
@@ -659,6 +730,55 @@ void drawLevelCompleteMenu(sf::RenderWindow& win, Game& G) {
     win.display();
 }
 
+void drawGameCompletedMenu(sf::RenderWindow& win, Game& G) {
+    win.clear(sf::Color::White);
+
+    if (G.hasFont) {
+        sf::Text t("Game Completed!", G.font, 48);
+        t.setFillColor(sf::Color::Black);
+        t.setPosition((WINDOW_W - t.getLocalBounds().width) / 2, 80);
+        win.draw(t);
+
+        char buf[256];
+        std::snprintf(buf, sizeof(buf),
+            "Total Distance: %.1fm\nTotal Coins: %d",
+            G.totalDistance_m, G.totalCoins);
+        sf::Text s(buf, G.font, 28);
+        s.setFillColor(sf::Color::Black);
+        s.setPosition((WINDOW_W - s.getLocalBounds().width) / 2, 160);
+        win.draw(s);
+
+        sf::Vector2i mousePos = sf::Mouse::getPosition(win);
+        sf::Color buttonNormal = sf::Color(0, 120, 255);
+        sf::Color buttonHover = sf::Color(0, 80, 200);
+        sf::Color buttonTextColor = sf::Color::White;
+
+        // Draw exit button (centered)
+        sf::RectangleShape exitButton(sf::Vector2f(200.0f, 50.0f));
+        exitButton.setPosition((WINDOW_W - 200.0f) / 2, 350.0f);
+        exitButton.setFillColor(exitButton.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? buttonHover : buttonNormal);
+        exitButton.setOutlineColor(sf::Color::Black);
+        exitButton.setOutlineThickness(2.0f);
+        win.draw(exitButton);
+
+        sf::Text exitText("Exit", G.font, 24);
+        exitText.setFillColor(buttonTextColor);
+        sf::FloatRect textBounds = exitText.getLocalBounds();
+        exitText.setPosition(
+            (WINDOW_W - 200.0f) / 2 + (200.0f - textBounds.width) / 2,
+            350.0f + (50.0f - textBounds.height) / 2 - textBounds.top
+        );
+        win.draw(exitText);
+
+        // Hint
+        sf::Text hint("Backspace: Main Menu", G.font, 22);
+        hint.setFillColor(sf::Color::Black);
+        hint.setPosition((WINDOW_W - hint.getLocalBounds().width) / 2, 620);
+        win.draw(hint);
+    }
+    win.display();
+}
+
 // ---------------------------- Main ------------------------------------
 int main() {
     sf::RenderWindow window(sf::VideoMode(WINDOW_W, WINDOW_H), "Black And White Racing");
@@ -775,6 +895,14 @@ int main() {
                             G.screen = Screen::Menu;
                         }
                     }
+                    else if (G.screen == Screen::GameCompleted && G.hasFont) {
+                        sf::RectangleShape exitButton(sf::Vector2f(200.0f, 50.0f));
+                        exitButton.setPosition((WINDOW_W - 200.0f) / 2, 350.0f);
+                        if (exitButton.getGlobalBounds().contains(mousePos)) {
+                            // Return to main menu
+                            G.screen = Screen::Menu;
+                        }
+                    }
                 }
             }
             if (ev.type == sf::Event::KeyPressed) {
@@ -796,27 +924,31 @@ int main() {
                         G.car.pressingLeft = true;
                 }
 
-                // Global key actions (valid in multiple screens)
-                if (ev.key.code == sf::Keyboard::Left) {
-                    int prev = std::max(G.currentLevel - 1, 0);
-                    G.currentLevel = prev;
-                    G.buildLevel(prev);
-                    G.screen = Screen::Playing;
-                }
-                else if (ev.key.code == sf::Keyboard::Right) {
-                    int next = std::min(G.currentLevel + 1, 4);
-                    if (next < G.unlockedLevels) {
-                        G.currentLevel = next;
-                        G.buildLevel(next);
+                // Screen-specific key actions for GameOver and LevelComplete
+                if (G.screen == Screen::GameOver || G.screen == Screen::LevelComplete) {
+                    if (ev.key.code == sf::Keyboard::Left) {
+                        int prev = std::max(G.currentLevel - 1, 0);
+                        G.currentLevel = prev;
+                        G.buildLevel(prev);
+                        G.screen = Screen::Playing;
+                    }
+                    else if (ev.key.code == sf::Keyboard::Right) {
+                        int next = std::min(G.currentLevel + 1, 4);
+                        if (next < G.unlockedLevels) {
+                            G.currentLevel = next;
+                            G.buildLevel(next);
+                            G.screen = Screen::Playing;
+                        }
+                    }
+                    else if (ev.key.code == sf::Keyboard::R) {
+                        // Restart current level — ensure currentLevel is preserved
+                        G.buildLevel(G.currentLevel);
                         G.screen = Screen::Playing;
                     }
                 }
-                else if (ev.key.code == sf::Keyboard::R) {
-                    // Restart current level — ensure currentLevel is preserved
-                    G.buildLevel(G.currentLevel);
-                    G.screen = Screen::Playing;
-                }
-                else if (ev.key.code == sf::Keyboard::BackSpace) {
+
+                // Global backspace action
+                if (ev.key.code == sf::Keyboard::BackSpace) {
                     G.screen = Screen::Menu;
                 }
             }
@@ -854,6 +986,19 @@ int main() {
                 G.headHitGround = true;
             }
 
+            // Fuel check
+            if (G.fuel_m <= 0.0f) {
+                if (G.fuel_out_timer < 0.0f) {
+                    G.fuel_out_timer = 3.0f;
+                }
+                else {
+                    G.fuel_out_timer -= DT_FIXED;
+                }
+            }
+            else {
+                G.fuel_out_timer = -1.0f;
+            }
+
             // Finish line
             if (G.car.x_px >= G.level.finishX_px) {
                 G.totalDistance_m += G.levelDistance_m;
@@ -867,14 +1012,12 @@ int main() {
                 }
                 else {
                     // All levels complete -> show final score
-                    G.screen = Screen::GameOver;
+                    G.screen = Screen::GameCompleted;
                 }
             }
 
-
-
-            // Fuel empty or crash -> game over
-            if (G.fuel_m <= 0.0f || G.headHitGround) {
+            // Fuel timeout or crash -> game over
+            if ((G.fuel_out_timer <= 0.0f && G.fuel_out_timer > -1.0f) || G.headHitGround) {
                 G.totalDistance_m += G.levelDistance_m;
                 G.totalCoins += G.coinsCollected;
                 G.screen = Screen::GameOver;
@@ -889,6 +1032,10 @@ int main() {
         }
         if (G.screen == Screen::LevelComplete) {
             drawLevelCompleteMenu(window, G);
+            continue;
+        }
+        if (G.screen == Screen::GameCompleted) {
+            drawGameCompletedMenu(window, G);
             continue;
         }
 
