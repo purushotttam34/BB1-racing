@@ -1,4 +1,4 @@
-// Hill Climb Racing-style Game with Levels, Fuel, Flipping, and Score (SFML Only)
+    // Hill Climb Racing-style Game with Levels, Fuel, Flipping, and Score (SFML Only)
 // Hill Climb Racing-style Game in SFML with Fuel, Score, Levels, and Flip Detection
 
 // SFML Hill-Style Climber
@@ -602,10 +602,10 @@ void drawGameOver(sf::RenderWindow& win, Game& G) {
         win.draw(leftArrow);
 
         // Draw right arrow
-        sf::Text rightArrow(sf::String(static_cast<sf::Uint32>(0x2192)), G.font, 60);
+        /*sf::Text rightArrow(sf::String(static_cast<sf::Uint32>(0x2192)), G.font, 60);
         rightArrow.setFillColor(rightArrow.getGlobalBounds().contains(static_cast<sf::Vector2f>(mousePos)) ? arrowHover : arrowNormal);
         rightArrow.setPosition(900, 350);
-        win.draw(rightArrow);
+        win.draw(rightArrow);*/
 
         // Draw retry button (middle)
         sf::RectangleShape retryButton(sf::Vector2f(200.0f, 50.0f));
@@ -989,7 +989,7 @@ int main() {
             // Fuel check
             if (G.fuel_m <= 0.0f) {
                 if (G.fuel_out_timer < 0.0f) {
-                    G.fuel_out_timer = 3.0f;
+                    G.fuel_out_timer = 5.0f;
                 }
                 else {
                     G.fuel_out_timer -= DT_FIXED;
